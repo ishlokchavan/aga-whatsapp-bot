@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AGA WhatsApp Bot — Remote Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    header {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status {
+      display: flex;
+      gap: 20px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    .status-item {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .status-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #667eea;
+    }
+    .status-label {
+      font-size: 12px;
+      color: #999;
+      text-transform: uppercase;
+    }
+
+    .controls {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .controls input, .controls select, .controls button {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .controls button {
+      background: #667eea;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .controls button:hover {
+      background: #764ba2;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .card h2 {
+      color: #667eea;
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+    .card canvas {
+      max-height: 300px;
+    }
+
+    .table-container {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      background: #f5f5f5;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #667eea;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+    tr:hover { background: #f9f9f9; }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-hot { background: #fecaca; color: #991b1b; }
+    .badge-warm { background: #fed7aa; color: #92400e; }
+    .badge-cold { background: #d1d5db; color: #374151; }
+
+    .notification {
+      padding: 12px;
+      border-left: 4px solid #667eea;
+      background: #f0f4ff;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .notification-time {
+      color: #999;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .error {
+      background: #fee;
+      padding: 15px;
+      border-radius: 8px;
+      color: #c00;
+      margin-bottom: 20px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #999;
+    }
+
+    .setup-guide {
+      background: #fffacd;
+      border-left: 4px solid #ffa500;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🤖 AGA WhatsApp Bot — Remote Dashboard</h1>
+      <p id="info-text">Connect to your bot server to see live data from Supabase</p>
+    </header>
+
+    <div class="controls">
+      <input type="url" id="server-url" placeholder="Bot server URL (e.g., http://localhost:3001)" style="flex: 1; min-width: 250px;">
+      <button onclick="connectServer()">Connect</button>
+      <button onclick="autoRefresh()" style="background: #4CAF50;">Auto Refresh (30s)</button>
+      <button onclick="exportData()" style="background: #FF9800;">Export CSV</button>
+    </div>
+
+    <div id="error" class="error" style="display: none;"></div>
+
+    <div class="setup-guide">
+      <strong>💡 Setup Instructions:</strong><br>
+      1. Run: <code>export SUPABASE_ANON_KEY="your-key"</code><br>
+      2. In Supabase SQL Editor, run the schema from <code>supabase-schema.sql</code><br>
+      3. Start the bot: <code>node bot.js</code><br>
+      4. Connect to <strong>http://localhost:3001</strong> above<br>
+      <strong>Remote Access:</strong> Get your server's public IP or set up ngrok: <code>ngrok http 3001</code>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>📊 Overview</h2>
+        <div style="font-size: 28px; font-weight: bold; color: #667eea; margin: 20px 0;">
+          <span id="total-contacts">0</span>
+          <span style="font-size: 14px; color: #999;"> Contacts</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div>
+            <div style="font-size: 18px; color: #4CAF50; font-weight: bold;" id="hot-leads">0</div>
+            <div style="font-size: 12px; color: #999;">Hot Leads</div>
+          </div>
+          <div>
+            <div style="font-size: 18px; color: #2196F3; font-weight: bold;" id="call-requests">0</div>
+            <div style="font-size: 12px; color: #999;">Call Requests</div>
+          </div>
+          <div>
+            <div style="font-size: 18px; color: #FF9800; font-weight: bold;" id="opt-outs">0</div>
+            <div style="font-size: 12px; color: #999;">Opt-outs</div>
+          </div>
+          <div>
+            <div style="font-size: 18px; color: #9C27B0; font-weight: bold;" id="last-update">-</div>
+            <div style="font-size: 12px; color: #999;">Last Update</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📈 Contact States</h2>
+        <canvas id="statesChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>🎯 Intent Distribution</h2>
+        <canvas id="intentChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>📞 Broadcast Queue</h2>
+        <div id="queue-stats">
+          <div style="margin: 10px 0;">
+            <span style="color: #667eea; font-weight: bold;" id="queue-total">0</span> Total
+          </div>
+          <div style="margin: 10px 0;">
+            <span style="color: #4CAF50; font-weight: bold;" id="queue-pending">0</span> Pending
+          </div>
+          <div style="margin: 10px 0;">
+            <span style="color: #2196F3; font-weight: bold;" id="queue-sent">0</span> Sent
+          </div>
+          <div style="margin: 10px 0;">
+            <span style="color: #f44336; font-weight: bold;" id="queue-failed">0</span> Failed
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <h2 style="margin-bottom: 15px;">🔔 Recent Notifications</h2>
+      <div id="notifications-list"></div>
+    </div>
+
+    <div class="table-container" style="margin-top: 20px;">
+      <h2 style="margin-bottom: 15px;">👥 Hot Leads</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>State</th>
+            <th>Intent</th>
+            <th>Sub-Community</th>
+            <th>Call Requested</th>
+            <th>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody id="contacts-table">
+          <tr><td colspan="7" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-container" style="margin-top: 20px;">
+      <h2 style="margin-bottom: 15px;">📨 Pending Broadcasts</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Segment</th>
+            <th>Attempts</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="queue-table">
+          <tr><td colspan="5" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let charts = {};
+    let autoRefreshInterval = null;
+    let serverUrl = localStorage.getItem('bot-server-url') || 'http://localhost:3001';
+
+    document.getElementById('server-url').value = serverUrl;
+
+    async function fetchAPI(endpoint) {
+      try {
+        const response = await fetch(`${serverUrl}${endpoint}`, {
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } catch (err) {
+        throw new Error(`Failed to fetch ${endpoint}: ${err.message}`);
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    async function refreshData() {
+      try {
+        const [stats, contacts, notifications, queue] = await Promise.all([
+          fetchAPI('/stats'),
+          fetchAPI('/contacts'),
+          fetchAPI('/notifications'),
+          fetchAPI('/queue')
+        ]);
+
+        updateStats(stats, queue);
+        updateCharts(stats);
+        updateContactsTable(contacts);
+        updateNotifications(notifications);
+        updateQueue(queue);
+
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    function updateStats(stats, queue) {
+      document.getElementById('total-contacts').textContent = stats.total || 0;
+      document.getElementById('hot-leads').textContent = stats.hotLeads || 0;
+      document.getElementById('call-requests').textContent = stats.callRequests || 0;
+      document.getElementById('opt-outs').textContent = stats.optOuts || 0;
+      document.getElementById('queue-total').textContent = queue.total || 0;
+      document.getElementById('queue-pending').textContent = queue.pending || 0;
+      document.getElementById('queue-sent').textContent = queue.sent || 0;
+      document.getElementById('queue-failed').textContent = queue.failed || 0;
+    }
+
+    function updateCharts(stats) {
+      const stateCtx = document.getElementById('statesChart').getContext('2d');
+      const intentCtx = document.getElementById('intentChart').getContext('2d');
+
+      if (charts.states) charts.states.destroy();
+      charts.states = new Chart(stateCtx, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(stats.byState || {}),
+          datasets: [{
+            data: Object.values(stats.byState || {}),
+            backgroundColor: ['#667eea', '#764ba2', '#4CAF50', '#2196F3', '#FF9800', '#f44336']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: true }
+      });
+
+      if (charts.intent) charts.intent.destroy();
+      charts.intent = new Chart(intentCtx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(stats.byIntent || {}),
+          datasets: [{
+            label: 'Count',
+            data: Object.values(stats.byIntent || {}),
+            backgroundColor: '#667eea'
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y' }
+      });
+    }
+
+    function updateContactsTable(contacts) {
+      const tbody = document.getElementById('contacts-table');
+      const hotLeads = contacts.filter(c => c.callRequested).slice(0, 20);
+
+      tbody.innerHTML = hotLeads.length > 0 ? hotLeads.map(c => `
+        <tr>
+          <td><strong>${c.name}</strong></td>
+          <td>${c.phone}</td>
+          <td><span class="badge badge-hot">${c.state}</span></td>
+          <td>${c.intent}</td>
+          <td>${c.subCommunity}</td>
+          <td>${c.callRequested ? '✅' : '❌'}</td>
+          <td>${new Date(c.updatedAt).toLocaleDateString()}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="7" class="loading">No hot leads</td></tr>';
+    }
+
+    function updateNotifications(notifications) {
+      const container = document.getElementById('notifications-list');
+      container.innerHTML = notifications.length > 0 ? notifications.slice(0, 10).map(n => `
+        <div class="notification">
+          <strong>${n.event}</strong><br>
+          ${n.contact.name} (${n.contact.phone}) — ${n.contact.state}
+          <div class="notification-time">${new Date(n.timestamp).toLocaleString()}</div>
+        </div>
+      `).join('') : '<div class="loading">No notifications yet</div>';
+    }
+
+    function updateQueue(queue) {
+      const tbody = document.getElementById('queue-table');
+      tbody.innerHTML = queue.next10?.length > 0 ? queue.next10.map((q, i) => `
+        <tr>
+          <td>${q.name}</td>
+          <td>${q.phone}</td>
+          <td>${q.segment}</td>
+          <td>-</td>
+          <td><span class="badge badge-warm">Pending</span></td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" class="loading">Queue empty</td></tr>';
+    }
+
+    function connectServer() {
+      serverUrl = document.getElementById('server-url').value.trim();
+      if (!serverUrl) return showError('Enter server URL');
+      localStorage.setItem('bot-server-url', serverUrl);
+      refreshData();
+    }
+
+    function autoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      } else {
+        autoRefreshInterval = setInterval(refreshData, 30000);
+        refreshData();
+      }
+    }
+
+    function exportData() {
+      showError('Export feature coming soon!');
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', refreshData);
+  </script>
+</body>
+</html>
