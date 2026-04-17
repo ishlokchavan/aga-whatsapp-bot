@@ -95,10 +95,16 @@ function markProcessed(msg) {
 }
 
 async function handleIncomingMessage(msg) {
-  if (markProcessed(msg)) return;
-  if (msg.isGroupMsg || msg.from === 'status@broadcast' || msg.fromMe) return;
+  // Filter non-user inbound traffic first.
+  const from = msg?.from || '';
+  const isGroup = from.endsWith('@g.us');
+  if (isGroup || from === 'status@broadcast' || msg.fromMe) return;
 
-  const phone = msg.from.replace('@c.us', '');
+  // Deduplicate only after inbound checks. This avoids dropping real inbound
+  // messages when one event variant is emitted as fromMe before the inbound one.
+  if (markProcessed(msg)) return;
+
+  const phone = from.replace('@c.us', '');
   const body  = msg.body.trim();
 
   console.log(`📩 Incoming message from ${phone}: "${body}"`);
