@@ -133,14 +133,14 @@ async function handleIncomingMessage(msg) {
 
   // ─── Activation check: Only respond to NEW contacts if they mention "TAG" or "Tilal Al Ghaf" ───
   // Existing contacts (already in flow) always get responses
-  if (contact.state === 'NEW' && !contact.hasEngaged) {
+  if (contact.state === 'NEW' && !contact.data?.hasEngaged) {
     const hasKeyword = /TAG|Tilal Al Ghaf/i.test(body);
     if (!hasKeyword) {
       console.log(`⏭️  Skipping NEW contact ${contact.name} (${phone}) — no keyword match. Message: "${body}"`);
       return;
     }
     console.log(`✅ NEW contact ${contact.name} (${phone}) mentioned keyword — activating flow`);
-    contact.hasEngaged = true; // Allow all future messages to be processed
+    contact.data.hasEngaged = true; // Persist in data object so it survives database round-trip
   }
 
   // Run through flow
