@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { getAllContacts, getStats, getMessages, getNotifications } = require('./contacts');
 const { getBroadcastStats, loadQueue } = require('./broadcast');
+const { isSupabaseEnabled, keyName } = require('./supabase');
 
 const PORT = process.env.PORT || 3001;
 
@@ -38,7 +39,15 @@ async function handleRequest(req, res) {
       const stats = await getStats();
       const broadcast = getBroadcastStats();
       res.writeHead(200);
-      res.end(JSON.stringify({ stats, broadcast, timestamp: new Date().toISOString() }));
+      res.end(JSON.stringify({
+        stats,
+        broadcast,
+        backend: {
+          storage: isSupabaseEnabled ? 'supabase' : 'local-json',
+          supabaseKeySource: keyName || null
+        },
+        timestamp: new Date().toISOString()
+      }));
       return;
     }
 

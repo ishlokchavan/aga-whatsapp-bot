@@ -8,16 +8,37 @@ const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vqhhnlunkyckrcgekwfu.supabase.co';
 // Accept multiple key names so deploy platforms (Railway/Vercel/etc.) are easier to configure.
-const SUPABASE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_KEY;
+const keyName = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? 'SUPABASE_SERVICE_ROLE_KEY'
+  : process.env.SUPABASE_ANON_KEY
+    ? 'SUPABASE_ANON_KEY'
+    : process.env.SUPABASE_KEY
+      ? 'SUPABASE_KEY'
+      : null;
+const SUPABASE_KEY = keyName ? process.env[keyName] : null;
+
+function decodeJwtRole(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return 'unknown';
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+    return payload.role || 'unknown';
+  } catch (_) {
+    return 'unknown';
+  }
+}
 
 const isSupabaseEnabled = Boolean(SUPABASE_KEY);
 const supabase = isSupabaseEnabled ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 if (!isSupabaseEnabled) {
   console.warn('⚠️  Supabase key not configured. Running with local JSON storage backend.');
+} else {
+  const keyRole = decodeJwtRole(SUPABASE_KEY);
+  console.log(`🗄️  Supabase enabled (${keyName}, role=${keyRole})`);
+  if (keyRole === 'anon') {
+    console.warn('⚠️  Using anon key. If RLS blocks inserts, switch to SUPABASE_SERVICE_ROLE_KEY.');
+  }
 }
 
 /**
@@ -53,4 +74,4 @@ async function initializeDatabase() {
   }
 }
 
-module.exports = { supabase, initializeDatabase, SUPABASE_URL, isSupabaseEnabled };
+module.exports = { supabase, initializeDatabase, SUPABASE_URL, isSupabaseEnabled, keyName };
