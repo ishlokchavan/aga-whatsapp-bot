@@ -71,12 +71,29 @@ client.on('ready', () => {
 });
 
 // ─── Incoming messages ───
-client.on('message', async (msg) => {
+const processedMessageIds = new Set();
+
+function markProcessed(msg) {
+  const id = msg?.id?._serialized;
+  if (!id) return false;
+  if (processedMessageIds.has(id)) return true;
+  processedMessageIds.add(id);
+  // Prevent unbounded memory growth in long-running sessions.
+  if (processedMessageIds.size > 5000) {
+    const first = processedMessageIds.values().next().value;
+    processedMessageIds.delete(first);
+  }
+  return false;
+}
+
+async function handleIncomingMessage(msg) {
+  if (markProcessed(msg)) return;
   if (msg.isGroupMsg || msg.from === 'status@broadcast' || msg.fromMe) return;
 
   const phone = msg.from.replace('@c.us', '');
   const body  = msg.body.trim();
 
+  console.log(`📩 Incoming message from ${phone}: "${body}"`);
   await logMessage({ phone, direction: 'in', body, timestamp: new Date().toISOString() });
 
   // Load or create contact
@@ -145,6 +162,14 @@ client.on('message', async (msg) => {
   await updateContact(contact);
 
   if (result.notify) notify(result.notify, contact);
+}
+
+client.on('message', (msg) => {
+  handleIncomingMessage(msg).catch(err => console.error('Incoming message error:', err.message));
+});
+
+client.on('message_create', (msg) => {
+  handleIncomingMessage(msg).catch(err => console.error('Incoming message_create error:', err.message));
 });
 
 // ─── Reply with typing simulation ───
