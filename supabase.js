@@ -5,25 +5,30 @@
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
-const fs = require('fs');
-const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vqhhnlunkyckrcgekwfu.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
+// Accept multiple key names so deploy platforms (Railway/Vercel/etc.) are easier to configure.
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_KEY;
 
-if (!SUPABASE_KEY) {
-  console.error('❌ Missing SUPABASE_ANON_KEY environment variable');
-  console.error('Set it in .env or export it: export SUPABASE_ANON_KEY="your-key"');
-  process.exit(1);
+const isSupabaseEnabled = Boolean(SUPABASE_KEY);
+const supabase = isSupabaseEnabled ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+if (!isSupabaseEnabled) {
+  console.warn('⚠️  Supabase key not configured. Running with local JSON storage backend.');
 }
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /**
  * Initialize database schema (creates tables if they don't exist)
  * Run this once to set up the database
  */
 async function initializeDatabase() {
+  if (!isSupabaseEnabled || !supabase) {
+    return;
+  }
+
   try {
     console.log('🔧 Initializing Supabase schema...');
 
@@ -48,4 +53,4 @@ async function initializeDatabase() {
   }
 }
 
-module.exports = { supabase, initializeDatabase, SUPABASE_URL };
+module.exports = { supabase, initializeDatabase, SUPABASE_URL, isSupabaseEnabled };

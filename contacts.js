@@ -1,69 +1,123 @@
 /**
- * Contact store - Supabase backend
- * Reads/writes to Supabase database instead of local JSON files
+ * Contact store
+ * Uses Supabase when configured, otherwise falls back to local JSON files.
  */
 
-const { supabase } = require('./supabase');
+const fs = require('fs');
+const path = require('path');
+const { supabase, isSupabaseEnabled } = require('./supabase');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
+const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
+const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+if (!isSupabaseEnabled) {
+  console.log('🗂️  Contacts backend: local JSON files');
+}
+
+function readJson(filePath, fallback) {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function writeJson(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
 
 // ─── Contact operations ───
 
 async function getContact(phone) {
-  try {
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('phone', phone)
-      .single();
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('phone', phone)
+        .single();
 
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
-    if (data) {
-      const formatted = _formatContact(data);
-      console.log(`✅ Loaded contact ${phone} with state: ${formatted.state}`);
-      return formatted;
+      if (error && error.code !== 'PGRST116') throw error;
+      return data ? _formatContact(data) : null;
+    } catch (err) {
+      console.error('❌ getContact error:', err.message);
+      return null;
     }
-    return null;
-  } catch (err) {
-    console.error('❌ getContact error:', err.message);
-    return null;
   }
+
+  const contacts = readJson(CONTACTS_FILE, []);
+  return contacts.find(c => c.phone === phone) || null;
 }
 
 async function saveContact(contact) {
-  try {
-    const record = _prepareContact(contact);
-    console.log(`💾 Saving contact ${contact.phone} with state: ${contact.state}`);
-    const { data, error } = await supabase
-      .from('contacts')
-      .upsert(record, { onConflict: 'phone' })
-      .select()
-      .single();
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const record = _prepareContact(contact);
+      const { data, error } = await supabase
+        .from('contacts')
+        .upsert(record, { onConflict: 'phone' })
+        .select()
+        .single();
 
-    if (error) throw error;
-    console.log(`✅ Contact ${contact.phone} saved successfully`);
-    return _formatContact(data);
-  } catch (err) {
-    console.error('❌ saveContact error for', contact.phone, ':', err.message);
+      if (error) throw error;
+      return _formatContact(data);
+    } catch (err) {
+      console.error('❌ saveContact error for', contact.phone, ':', err.message);
+      return null;
+    }
   }
+
+  const now = new Date().toISOString();
+  const contacts = readJson(CONTACTS_FILE, []);
+  const idx = contacts.findIndex(c => c.phone === contact.phone);
+  const merged = {
+    phone: contact.phone,
+    name: contact.name,
+    state: contact.state,
+    data: contact.data || {},
+    history: contact.history || [],
+    callRequested: Boolean(contact.callRequested),
+    optOut: Boolean(contact.optOut),
+    createdAt: contact.createdAt || now,
+    updatedAt: now
+  };
+
+  if (idx >= 0) contacts[idx] = { ...contacts[idx], ...merged, createdAt: contacts[idx].createdAt || merged.createdAt };
+  else contacts.push(merged);
+
+  writeJson(CONTACTS_FILE, contacts);
+  return merged;
 }
 
 async function updateContact(contact) {
-  contact.updated_at = new Date().toISOString();
   return saveContact(contact);
 }
 
 async function getAllContacts() {
-  try {
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('*')
-      .order('updated_at', { ascending: false });
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .order('updated_at', { ascending: false });
 
-    if (error) throw error;
-    return data.map(_formatContact);
-  } catch (err) {
-    console.error('❌ getAllContacts error:', err.message);
-    return [];
+      if (error) throw error;
+      return data.map(_formatContact);
+    } catch (err) {
+      console.error('❌ getAllContacts error:', err.message);
+      return [];
+    }
   }
+
+  const contacts = readJson(CONTACTS_FILE, []);
+  return contacts.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 }
 
 async function loadContacts() {
@@ -73,42 +127,56 @@ async function loadContacts() {
 // ─── Message log ───
 
 async function logMessage({ phone, direction, body, timestamp }) {
-  try {
-    const { error } = await supabase
-      .from('messages')
-      .insert({
-        phone,
-        direction,
-        body,
-        created_at: timestamp
-      });
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          phone,
+          direction,
+          body,
+          created_at: timestamp
+        });
 
-    if (error) throw error;
-  } catch (err) {
-    console.error('❌ logMessage error:', err.message);
+      if (error) throw error;
+      return;
+    } catch (err) {
+      console.error('❌ logMessage error:', err.message);
+      return;
+    }
   }
+
+  const messages = readJson(MESSAGES_FILE, []);
+  messages.push({ phone, direction, body, timestamp });
+  writeJson(MESSAGES_FILE, messages);
 }
 
 async function getMessages(phone) {
-  try {
-    let query = supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(50);
+  if (isSupabaseEnabled && supabase) {
+    try {
+      let query = supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(50);
 
-    if (phone) {
-      query = query.eq('phone', phone);
+      if (phone) {
+        query = query.eq('phone', phone);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data.map(m => ({
+        phone: m.phone,
+        direction: m.direction,
+        body: m.body,
+        timestamp: m.created_at
+      }));
+    } catch (err) {
+      console.error('❌ getMessages error:', err.message);
+      return [];
     }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return data.map(m => ({
-      phone: m.phone,
-      direction: m.direction,
-      body: m.body,
-      timestamp: m.created_at
-    }));
-  } catch (err) {
-    console.error('❌ getMessages error:', err.message);
-    return [];
   }
+
+  const messages = readJson(MESSAGES_FILE, []);
+  const filtered = phone ? messages.filter(m => m.phone === phone) : messages;
+  return filtered.slice(-50).reverse();
 }
 
 // ─── Stats helpers ───
@@ -128,8 +196,8 @@ async function getStats() {
       if (c.data && c.data.intent) {
         byIntent[c.data.intent] = (byIntent[c.data.intent] || 0) + 1;
       }
-      if (c.opt_out) optOuts++;
-      if (c.call_requested) callRequests++;
+      if (c.optOut) optOuts++;
+      if (c.callRequested) callRequests++;
       if (c.data && (c.data.priority === 'hot' || ['SELL_HOT_HANDOFF', 'BUY_HANDOFF', 'VALUATION_HANDOFF'].includes(c.state))) {
         hotLeads++;
       }
@@ -145,46 +213,68 @@ async function getStats() {
 // ─── Notification helpers ───
 
 async function addNotification(event, contact) {
-  try {
-    const { error } = await supabase
-      .from('notifications')
-      .insert({
-        event,
-        contact_phone: contact.phone,
-        contact_name: contact.name,
-        contact_state: contact.state,
-        contact_data: contact.data
-      });
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .insert({
+          event,
+          contact_phone: contact.phone,
+          contact_name: contact.name,
+          contact_state: contact.state,
+          contact_data: contact.data
+        });
 
-    if (error) throw error;
-  } catch (err) {
-    console.error('❌ addNotification error:', err.message);
+      if (error) throw error;
+      return;
+    } catch (err) {
+      console.error('❌ addNotification error:', err.message);
+      return;
+    }
   }
+
+  const notifications = readJson(NOTIFICATIONS_FILE, []);
+  notifications.push({
+    event,
+    contact: {
+      name: contact.name,
+      phone: contact.phone,
+      state: contact.state,
+      data: contact.data || {}
+    },
+    timestamp: new Date().toISOString()
+  });
+  writeJson(NOTIFICATIONS_FILE, notifications);
 }
 
 async function getNotifications(limit = 50) {
-  try {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    if (error) throw error;
-    return data.map(n => ({
-      event: n.event,
-      contact: {
-        name: n.contact_name,
-        phone: n.contact_phone,
-        state: n.contact_state,
-        data: n.contact_data
-      },
-      timestamp: n.created_at
-    }));
-  } catch (err) {
-    console.error('❌ getNotifications error:', err.message);
-    return [];
+      if (error) throw error;
+      return data.map(n => ({
+        event: n.event,
+        contact: {
+          name: n.contact_name,
+          phone: n.contact_phone,
+          state: n.contact_state,
+          data: n.contact_data
+        },
+        timestamp: n.created_at
+      }));
+    } catch (err) {
+      console.error('❌ getNotifications error:', err.message);
+      return [];
+    }
   }
+
+  const notifications = readJson(NOTIFICATIONS_FILE, []);
+  return notifications.slice(-limit).reverse();
 }
 
 // ─── Helper functions ───
@@ -196,8 +286,8 @@ function _formatContact(dbRecord) {
     state: dbRecord.state,
     data: dbRecord.data || {},
     history: dbRecord.history || [],
-    callRequested: dbRecord.call_requested,
-    optOut: dbRecord.opt_out,
+    callRequested: Boolean(dbRecord.call_requested),
+    optOut: Boolean(dbRecord.opt_out),
     createdAt: dbRecord.created_at,
     updatedAt: dbRecord.updated_at
   };
@@ -210,8 +300,8 @@ function _prepareContact(contact) {
     state: contact.state,
     data: contact.data || {},
     history: contact.history || [],
-    call_requested: contact.callRequested || false,
-    opt_out: contact.optOut || false,
+    call_requested: Boolean(contact.callRequested),
+    opt_out: Boolean(contact.optOut),
     updated_at: new Date().toISOString()
   };
 }
