@@ -72,6 +72,14 @@ client.on('ready', () => {
 
 // ─── Incoming messages ───
 const processedMessageIds = new Set();
+// Track recently-activated phones in-memory so a quick follow-up reply
+// (e.g. "3") is accepted even if the DB hasn't finished persisting
+// `contact.data.hasEngaged`. Entries expire after 10 minutes.
+const activeEngagedPhones = new Set();
+function markPhoneEngaged(phone, ttlMs = 10 * 60 * 1000) {
+  activeEngagedPhones.add(phone);
+  setTimeout(() => activeEngagedPhones.delete(phone), ttlMs);
+}
 
 function markProcessed(msg) {
   const id = msg?.id?._serialized;
@@ -133,7 +141,7 @@ async function handleIncomingMessage(msg) {
 
   // ─── Activation check: Only respond to NEW contacts if they mention "TAG" or "Tilal Al Ghaf" ───
   // Existing contacts (already in flow) always get responses
-  if (contact.state === 'NEW' && !contact.data?.hasEngaged) {
+  if (contact.state === 'NEW' && !contact.data?.hasEngaged && !activeEngagedPhones.has(phone)) {
     const hasKeyword = /TAG|Tilal Al Ghaf/i.test(body);
     if (!hasKeyword) {
       console.log(`⏭️  Skipping NEW contact ${contact.name} (${phone}) — no keyword match. Message: "${body}"`);
@@ -141,6 +149,7 @@ async function handleIncomingMessage(msg) {
     }
     console.log(`✅ NEW contact ${contact.name} (${phone}) mentioned keyword — activating flow`);
     contact.data.hasEngaged = true; // Persist in data object so it survives database round-trip
+    markPhoneEngaged(phone);
   }
 
   // Run through flow
