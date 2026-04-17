@@ -11,6 +11,9 @@ const DATA_DIR = path.join(__dirname, 'data');
 const CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
+const CONTACTS_TABLE = process.env.SUPABASE_CONTACTS_TABLE || 'contacts';
+const MESSAGES_TABLE = process.env.SUPABASE_MESSAGES_TABLE || 'messages';
+const NOTIFICATIONS_TABLE = process.env.SUPABASE_NOTIFICATIONS_TABLE || 'notifications';
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -39,7 +42,7 @@ async function getContact(phone) {
   if (isSupabaseEnabled && supabase) {
     try {
       const { data, error } = await supabase
-        .from('contacts')
+        .from(CONTACTS_TABLE)
         .select('*')
         .eq('phone', phone)
         .single();
@@ -61,7 +64,7 @@ async function saveContact(contact) {
     try {
       const record = _prepareContact(contact);
       const { data, error } = await supabase
-        .from('contacts')
+        .from(CONTACTS_TABLE)
         .upsert(record, { onConflict: 'phone' })
         .select()
         .single();
@@ -104,7 +107,7 @@ async function getAllContacts() {
   if (isSupabaseEnabled && supabase) {
     try {
       const { data, error } = await supabase
-        .from('contacts')
+        .from(CONTACTS_TABLE)
         .select('*')
         .order('updated_at', { ascending: false });
 
@@ -130,7 +133,7 @@ async function logMessage({ phone, direction, body, timestamp }) {
   if (isSupabaseEnabled && supabase) {
     try {
       const { error } = await supabase
-        .from('messages')
+        .from(MESSAGES_TABLE)
         .insert({
           phone,
           direction,
@@ -154,7 +157,7 @@ async function logMessage({ phone, direction, body, timestamp }) {
 async function getMessages(phone) {
   if (isSupabaseEnabled && supabase) {
     try {
-      let query = supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(50);
+      let query = supabase.from(MESSAGES_TABLE).select('*').order('created_at', { ascending: false }).limit(50);
 
       if (phone) {
         query = query.eq('phone', phone);
@@ -216,7 +219,7 @@ async function addNotification(event, contact) {
   if (isSupabaseEnabled && supabase) {
     try {
       const { error } = await supabase
-        .from('notifications')
+        .from(NOTIFICATIONS_TABLE)
         .insert({
           event,
           contact_phone: contact.phone,
@@ -251,7 +254,7 @@ async function getNotifications(limit = 50) {
   if (isSupabaseEnabled && supabase) {
     try {
       const { data, error } = await supabase
-        .from('notifications')
+        .from(NOTIFICATIONS_TABLE)
         .select('*')
         .order('created_at', { ascending: false })
         .limit(limit);
