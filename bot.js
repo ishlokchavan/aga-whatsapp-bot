@@ -16,6 +16,17 @@ const { processBroadcastQueue } = require('./broadcast');
 const { server, PORT, setQR } = require('./server');
 const config = require('./config');
 
+// Optional one-time reset for stale WhatsApp auth sessions in cloud deploys.
+if (process.env.WA_RESET_AUTH === 'true') {
+  const authPath = path.join(__dirname, '.wwebjs_auth');
+  try {
+    fs.rmSync(authPath, { recursive: true, force: true });
+    console.log('🧹 WA_RESET_AUTH=true -> cleared .wwebjs_auth');
+  } catch (err) {
+    console.warn('⚠️  Failed to clear .wwebjs_auth:', err.message);
+  }
+}
+
 // ─── Start dashboard API ───
 server.listen(PORT, () => {
   console.log(`📊 Dashboard API: http://localhost:${PORT}`);
@@ -44,7 +55,10 @@ client.on('qr', (qr) => {
 });
 
 client.on('authenticated', () => console.log('✅ Authenticated — session saved.'));
-client.on('auth_failure', (m) => console.error('❌ Auth failed:', m));
+client.on('auth_failure', (m) => {
+  console.error('❌ Auth failed:', m);
+  console.error('Tip: set WA_RESET_AUTH=true for one deploy, scan again, then set it back to false.');
+});
 client.on('disconnected', (r) => console.warn('⚠️  Disconnected:', r, '— restart bot.js'));
 
 client.on('ready', () => {
