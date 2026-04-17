@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "node bot.js"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[deploy.healthcheck]
+path = "/stats"
+initialDelaySeconds = 30
+periodSeconds = 30

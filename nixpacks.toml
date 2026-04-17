@@ -1,0 +1,38 @@
+# Nixpacks build config for Railway
+# Provides system shared libs required by Puppeteer's bundled Chromium on Linux
+# Puppeteer downloads its own Chrome during npm install — do NOT set CHROME_PATH on Railway
+
+[phases.setup]
+nixPkgs = [
+  "glib",
+  "nss",
+  "nspr",
+  "atk",
+  "cups",
+  "dbus",
+  "expat",
+  "libdrm",
+  "libxkbcommon",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "mesa",
+  "pango",
+  "cairo",
+  "alsa-lib",
+  "at-spi2-atk",
+  "at-spi2-core"
+]
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "node bot.js"
+

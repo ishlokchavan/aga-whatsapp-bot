@@ -3,7 +3,20 @@
  * Edit this file to change behaviour, messages, and limits
  */
 
+require('dotenv').config();
+
+// Agent identity — set BOT_AGENT_NAME and BOT_COMPANY_NAME in env/Railway vars
+const agentName   = process.env.BOT_AGENT_NAME  || 'Shlok';
+const companyName = process.env.BOT_COMPANY_NAME || '';
+// "Shlok from AGA Real Estate" or just "Shlok" if no company set
+const agentLabel  = companyName ? `${agentName} from ${companyName}` : agentName;
+
 module.exports = {
+
+  // Expose for use in other modules
+  agentName,
+  companyName,
+  agentLabel,
 
   // ─── Chrome / Puppeteer path ───
   // Leave blank for auto-detection on Mac/Windows
@@ -21,7 +34,7 @@ module.exports = {
     // Variables: {name}, {sub_community}, {community}
     templates: {
       // Segment A: potential sellers
-      A: `Hi {name}, this is Shlok from AGA Real Estate.
+      A: `Hi {name}, this is ${agentLabel}.
 
 I noticed you own a property in Tilal Al Ghaf — one of the communities I specialise in.
 
@@ -30,7 +43,7 @@ Buyer demand for TAG has stayed strong through Q1 2026. If you've ever thought a
 Just reply and I'll get back to you.`,
 
       // Segment B: potential landlords
-      B: `Hi {name}, this is Shlok from AGA Real Estate.
+      B: `Hi {name}, this is ${agentLabel}.
 
 I work specifically in Tilal Al Ghaf and I've been helping owners rent out their units at strong rates this year.
 
@@ -39,7 +52,7 @@ If your property is currently vacant or coming up for renewal, I can tell you wh
 Just drop me a reply if it's useful.`,
 
       // Segment C: general warm
-      C: `Hi {name}, this is Shlok from AGA Real Estate.
+      C: `Hi {name}, this is ${agentLabel}.
 
 I specialise in Tilal Al Ghaf and keep close tabs on what's happening in the community — transactions, pricing, new developments.
 

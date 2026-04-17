@@ -13,7 +13,7 @@ const path = require('path');
 const { getNextState, renderMessage } = require('./flow');
 const { saveContact, getContact, updateContact, logMessage, addNotification } = require('./contacts');
 const { processBroadcastQueue } = require('./broadcast');
-const { server, PORT } = require('./server');
+const { server, PORT, setQR } = require('./server');
 const config = require('./config');
 
 // ─── Start dashboard API ───
@@ -34,7 +34,11 @@ if (config.chromePath) clientOptions.puppeteer.executablePath = config.chromePat
 const client = new Client(clientOptions);
 
 client.on('qr', (qr) => {
-  console.log('\n📱 Scan this QR code with your WhatsApp:\n');
+  setQR(qr);
+  const host = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : `http://localhost:${PORT}`;
+  console.log(`\n📱 Scan QR at: ${host}/qr\n`);
   qrcode.generate(qr, { small: true });
   console.log('\nWhatsApp → Linked Devices → Link a Device\n');
 });

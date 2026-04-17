@@ -12,7 +12,16 @@ const path = require('path');
 const { getAllContacts, getStats, getMessages, getNotifications } = require('./contacts');
 const { getBroadcastStats, loadQueue } = require('./broadcast');
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+
+// ─── QR code state (set by bot.js when WhatsApp needs re-auth) ───
+let _latestQR = null;
+let _qrGeneratedAt = null;
+
+function setQR(qrString) {
+  _latestQR = qrString;
+  _qrGeneratedAt = new Date();
+}
 
 async function handleRequest(req, res) {
   // CORS for dashboard.html opened as a local file
@@ -89,6 +98,31 @@ async function handleRequest(req, res) {
       return;
     }
 
+    if (url === '/qr') {
+      res.setHeader('Content-Type', 'text/html');
+      res.writeHead(200);
+      if (!_latestQR) {
+        res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center">
+          <h2>WhatsApp Bot — QR Code</h2>
+          <p>✅ Already authenticated, or waiting for QR to generate...</p>
+          <p style="color:#888">If bot just started, refresh in 10 seconds.</p>
+          <script>setTimeout(()=>location.reload(),5000)</script>
+        </body></html>`);
+        return;
+      }
+      const QRCode = require('qrcode');
+      const dataUrl = await QRCode.toDataURL(_latestQR, { width: 300, margin: 2 });
+      res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center">
+        <h2>📱 Scan with WhatsApp</h2>
+        <p>WhatsApp → Linked Devices → Link a Device</p>
+        <img src="${dataUrl}" style="border:2px solid #eee;padding:10px;border-radius:8px" />
+        <p style="color:#999;font-size:13px">Generated: ${_qrGeneratedAt.toISOString()}</p>
+        <p style="color:#999;font-size:13px">This page auto-refreshes every 30s</p>
+        <script>setTimeout(()=>location.reload(),30000)</script>
+      </body></html>`);
+      return;
+    }
+
     if (url === '/' || url === '/dashboard') {
       const dashboardPath = path.join(__dirname, 'dashboard-remote.html');
       if (fs.existsSync(dashboardPath)) {
@@ -119,4 +153,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, PORT };
+module.exports = { server, PORT, setQR };
