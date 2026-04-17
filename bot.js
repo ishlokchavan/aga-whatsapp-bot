@@ -143,11 +143,27 @@ async function handleIncomingMessage(msg) {
   // Existing contacts (already in flow) always get responses
   if (contact.state === 'NEW' && !contact.data?.hasEngaged && !activeEngagedPhones.has(phone)) {
     const hasKeyword = /TAG|Tilal Al Ghaf/i.test(body);
-    if (!hasKeyword) {
+
+    // Allow numeric replies (1-5) if there is a recent TAG in the contact history
+    const isNumericReply = /^[\s\D]*([1-9][0-9]*)[\s\D]*$/.test(body);
+    let recentTagFound = false;
+    try {
+      if (contact.history && Array.isArray(contact.history)) {
+        const cutoff = Date.now() - (10 * 60 * 1000); // 10 minutes
+        recentTagFound = contact.history.some(h => {
+          const ts = new Date(h.ts).getTime();
+          return ts >= cutoff && /TAG|Tilal Al Ghaf/i.test(h.input);
+        });
+      }
+    } catch (e) { recentTagFound = false; }
+
+    if (!hasKeyword && !(isNumericReply && recentTagFound)) {
       console.log(`⏭️  Skipping NEW contact ${contact.name} (${phone}) — no keyword match. Message: "${body}"`);
       return;
     }
-    console.log(`✅ NEW contact ${contact.name} (${phone}) mentioned keyword — activating flow`);
+
+    console.log(`✅ NEW contact ${contact.name} (${phone}) mentioned keyword or recent TAG — activating flow`);
+    if (!contact.data) contact.data = {};
     contact.data.hasEngaged = true; // Persist in data object so it survives database round-trip
     markPhoneEngaged(phone);
   }
