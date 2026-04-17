@@ -64,6 +64,13 @@ client.on('disconnected', (r) => console.warn('⚠️  Disconnected:', r, '— r
 client.on('ready', () => {
   console.log('\n' + '─'.repeat(48));
   console.log('🤖  AGA TAG Bot running on your WhatsApp');
+  try {
+    const linkedId = client.info?.wid?._serialized || client.info?.wid?.user || 'unknown';
+    const pushName = client.info?.pushname || 'unknown';
+    console.log(`📱  Linked account: ${pushName} (${linkedId})`);
+  } catch (_) {
+    console.log('📱  Linked account: unavailable');
+  }
   console.log('📊  Open dashboard.html in your browser');
   console.log('📤  Queue sends: node broadcast.js --help');
   console.log('─'.repeat(48) + '\n');
